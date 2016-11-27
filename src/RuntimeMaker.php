@@ -1,6 +1,8 @@
 <?php
 namespace Hirak\Kibi;
 
+use ReflectionClass;
+
 class RuntimeMaker
 {
     private $namespaces = [];
@@ -12,9 +14,14 @@ class RuntimeMaker
         $this->namespaces[$namespace] = true;
     }
 
-    public function addTraits(string $trait)
+    public function addTrait(string $trait)
     {
         $this->traits[$trait] = true;
+    }
+
+    public function hasTrait(string $trait)
+    {
+        return isset($this->traits[$trait]);
     }
 
     /**
@@ -56,7 +63,7 @@ class RuntimeMaker
         foreach ($keys as $key) {
             if (isset($this->factories[$key])) {
                 $factory = $this->factories[$key];
-                $response = $factory['instance']->{'get' . ucfirst($factory['name'])}();
+                $response = $factory['instance']->{"get__$factory[name]"}();
 
                 if (0 === $factory['count']) {
                     // 返却できるものが他にあるとしたらそれも追加しておく

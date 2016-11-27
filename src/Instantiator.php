@@ -7,50 +7,76 @@
 namespace Hirak\Kibi;
 
 use ReflectionClass;
+use ReflectionMethod;
 
 class Instantiator
 {
-    private $cache;
+    private $compiledMaker;
+    private $runtimeMaker;
+
+    private $compiledMakerPath;
+
+    private $contexts = [];
 
     public function __construct(array $config = [])
     {
         $config += [
-            'strict' => false,
             'cache' => false,
         ];
-        if ($config['strict']) {
-            $stacktrace = debug_backtrace(0, 2);
-            if (count($stacktrace) > 1) {
-                throw new \LogicException('You must invoke Instantiator at top level.');
+
+        if ($config['cache']) {
+            $this->compiledMakerPath = $config['cache'];
+            if (!is_writable($config['cache'])) {
+                throw new Exception\FilesystemError("{$config['cache']} is not writable.");
+            }
+            if (file_exists($config['cache'])) {
+                $this->compiledMaker = require $config['cache'];
+            }
+        }
+
+        $this->runtimeMaker = new RuntimeMaker;
+    }
+
+    public function addTrait(string $traitName)
+    {
+        if (!trait_exists($traitName)) {
+            throw new Exception\InvalidArgumentError("trait: $traitName is not defined.");
+        }
+
+        if ($this->runtimeMaker->hasTrait($traitName)) {
+            return;
+        }
+
+        $instance = eval('return new class { use ' . $traitName . '; };');
+        $rc = new ReflectionClass($traitName);
+        $nsName = $rc->getNamespaceName();
+        foreach ($rc->getMethods(ReflectionMethod::IS_PUBLIC) as $rm) {
+            $methodName = $rm->name;
+            if (0 === strncmp('get__', $methodName, 5)) {
+                $this->runtimeMaker->addNamespace($nsName);
+                $this->runtimeMaker->addTrait($traitName);
+
+                $retType = $rm->getReturnType();
+                $name = substr($methodName, 5);
+                if (ctype_digit($name)) {
+                    $name = '';
+                }
+                $this->runtimeMaker->addFactory($nsName, (string)$retType, $name, $traitName, $instance);
             }
         }
     }
 
-    /**
-     * @param string $id
-     */
-    public function generateByClass(string $className)
+    public function get(string $id)
     {
-        $rc = new ReflectionClass($className);
-        $constr = $rc->getConstructor();
-        if (!$constr) {
-            return $rc->newInstance();
+        if (false === strpos($id, '#')) {
+            $id .= '#';
         }
-
-        $params = [];
-        foreach ($constr->getParameters() as $param) {
-            if (!$param->hasType()) {
-                //今のところ これに対処する手段はない
-                throw new \RuntimeException($param->name . ' don\'t have any decralations.');
-            }
-            $type = $param->getType();
-            if ($type->isBuiltin()) {
-                //今のところ これに対処する手段はない
-                throw new \RuntimeException("$type cannot instantiate");
-            }
-            $params[] = $this->generateByClass($type);
+        list($class, $name) = explode('#', $id);
+        if (!class_exists($class)) {
+            throw new Exception\CannotInstantiateError("$class is not found.");
         }
-
-        return $rc->newInstanceArgs($params);
+        $rc = new ReflectionClass($class);
+        $namespace = $rc->getNamespaceName();
+        return $this->runtimeMaker->generate($namespace, $type, $name);
     }
 }
