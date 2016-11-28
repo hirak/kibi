@@ -72,11 +72,11 @@ class Instantiator
             $id .= '#';
         }
         list($class, $name) = explode('#', $id);
-        if (!class_exists($class)) {
-            throw new Exception\CannotInstantiateError("$class is not found.");
+        $namespace = '';
+        if (false !== strpos($class, '\\')) {
+            $normalized = strtr($class, '\\', '/');
+            $namespace = strtr(dirname($normalized), '/', '\\');
         }
-        $rc = new ReflectionClass($class);
-        $namespace = $rc->getNamespaceName();
-        return $this->runtimeMaker->generate($namespace, $type, $name);
+        return $this->runtimeMaker->generate($namespace, $class, $name);
     }
 }

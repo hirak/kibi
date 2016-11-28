@@ -48,7 +48,7 @@ class RuntimeMaker
     {
         $normalizedtype = strtr($type, '\\', '_');
         $keys = [];
-        foreach ($this->namespaces as $ns) {
+        foreach ($this->namespaces as $ns => $_) {
             if (0 === strncmp($ns, $namespace, strlen($ns))) {
                 $normalizedns = strtr($ns, '\\', '_');
                 $keys[] = "{$normalizedns}__{$normalizedtype}__{$name}";
@@ -97,9 +97,9 @@ class RuntimeMaker
         $params = [];
         foreach ($constr->getParameters() as $param) {
             if ($param->hasType()) {
-                $params[] = $this->generate($namespace, (string)$param->getType(), (string)$param);
+                $params[] = $this->generate($namespace, (string)$param->getType(), $param->name);
             } else {
-                $params[] = $this->generate($namespace, '', (string)$param);
+                $params[] = $this->generate($namespace, '', $param->name);
             }
         }
 
